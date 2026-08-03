@@ -170,36 +170,11 @@
         function iniciarEscanner() {
             if (escaneando) return;
 
-            // Se indican explícitamente los formatos de código de barras de productos
-            // físicos (EAN/UPC/Code128/Code39) además de QR. Esto acelera la detección
-            // y evita falsos negativos al no forzar a la librería a probar todos los
-            // formatos posibles en cada frame.
-            html5QrCode = new Html5Qrcode("reader", {
-                formatsToSupport: [
-                    Html5QrcodeSupportedFormats.EAN_13,
-                    Html5QrcodeSupportedFormats.EAN_8,
-                    Html5QrcodeSupportedFormats.UPC_A,
-                    Html5QrcodeSupportedFormats.UPC_E,
-                    Html5QrcodeSupportedFormats.CODE_128,
-                    Html5QrcodeSupportedFormats.CODE_39,
-                    Html5QrcodeSupportedFormats.QR_CODE
-                ],
-                // Usa el BarcodeDetector nativo del navegador/SO cuando está disponible
-                // (Chrome en Android). Es mucho más rápido y preciso leyendo EAN-13 que
-                // el decoder JS interno de la librería, que es débil con códigos 1D.
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
-                },
-                verbose: false
-            });
-
+            html5QrCode = new Html5Qrcode("reader");
             const config = { 
-                fps: 15,
-                // Caja más ancha y baja: un EAN-13 es un rectángulo horizontal,
-                // no un cuadrado como el QR. Esto facilita el encuadre del producto.
-                qrbox: { width: 300, height: 100 },
-                aspectRatio: 1.777778,
-                disableFlip: false
+                fps: 20, 
+                qrbox: { width: 280, height: 120 },
+                aspectRatio: 1.777778
             };
 
             html5QrCode.start(
@@ -249,12 +224,7 @@
             if (filtrados.length === 0) return;
 
             let actualEsperado = filtrados[indiceActual];
-
-            // Normaliza ambos códigos: quita espacios y compara solo dígitos/letras.
-            // Esto evita falsos "NO COINCIDE" cuando el Sheet trae el código con
-            // ceros a la izquierda distintos o espacios invisibles.
-            const normalizar = (str) => (str || "").toString().trim().replace(/\s+/g, "");
-            let coincideCodigo = normalizar(actualEsperado.codigoEsperado) === normalizar(codigoLeido);
+            let coincideCodigo = actualEsperado.codigoEsperado.trim() === codigoLeido.trim();
 
             if (coincideCodigo) {
                 divResultado.className = "p-2 rounded text-center font-bold text-xs bg-green-100 text-green-800 border border-green-400";
