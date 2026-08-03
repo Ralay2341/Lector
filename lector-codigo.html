@@ -11,7 +11,7 @@
     <style>
         /* Estilo para resaltar la zona de lectura dentro del video */
         #reader__scan_region {
-            background: rgba(0, 0, 0, 0.15);
+            background: rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
@@ -58,20 +58,18 @@
         <!-- Estado de carga -->
         <div id="statusCarga" class="text-center text-xs font-semibold mb-2 text-gray-500">Datos no sincronizados</div>
 
-        <!-- Sección de Cámara en Vivo con Botón Activador -->
+        <!-- Sección de Escaneo con Cámara en Vivo -->
         <div id="seccionEscaneo" class="hidden mb-2">
             <div class="mb-1 flex justify-between items-center">
-                <span class="text-xs font-medium text-slate-700">📷 Video en Vivo:</span>
-                <span id="indicadorEstado" class="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded">Cámara Activa</span>
+                <span class="text-xs font-medium text-slate-700">📷 Escáner en Vivo:</span>
+                <div>
+                    <button onclick="detenerEscanner()" id="btnDetener" class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded hidden font-bold shadow-sm">Apagar</button>
+                    <button onclick="reiniciarEscanner()" id="btnIniciar" class="text-[10px] bg-green-100 text-green-600 px-2 py-0.5 rounded font-bold shadow-sm">Encender</button>
+                </div>
             </div>
             
             <!-- Visor de la cámara en vivo -->
-            <div id="reader" class="w-full rounded border-2 border-dashed border-blue-400 overflow-hidden bg-black h-48 mb-2"></div>
-
-            <!-- 🔘 BOTÓN QUE ACTIVA LA LECTURA INSTANTÁNEA -->
-            <button onclick="activarLecturaBoton()" id="btnDisparador" class="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2.5 px-3 rounded text-sm transition shadow flex items-center justify-center">
-                <span class="mr-1">⚡ LEER CÓDIGO AHORA</span>
-            </button>
+            <div id="reader" class="w-full rounded border-2 border-dashed border-blue-400 overflow-hidden bg-black h-48"></div>
         </div>
 
         <!-- Resultados de Validación -->
@@ -84,8 +82,8 @@
         let datosSheet = [];
         let html5QrCode = null;
         let escaneando = false;
-        let permiteLectura = false; // Controla que solo lea cuando presionas el botón
         let indiceActual = 0;
+        let procesandoLectura = false; // Evita lecturas duplicadas seguidas
 
         const selectRack = document.getElementById('selectRack');
         for (let i = 1; i <= 15; i++) {
@@ -147,6 +145,7 @@
                 indiceActual = (indiceActual + 1) % filtrados.length;
                 actualizarUbicacionPantalla();
                 document.getElementById('resultadoValidacion').classList.add('hidden');
+                procesandoLectura = false;
             }
         }
 
@@ -166,7 +165,7 @@
                 actualizarUbicacionPantalla();
 
                 document.getElementById('seccionEscaneo').classList.remove('hidden');
-                iniciarCamaraEnVivo();
+                iniciarEscanner();
             } catch (error) {
                 console.error(error);
                 status.textContent = "❌ Error al cargar datos.";
@@ -174,22 +173,21 @@
             }
         }
 
-        function iniciarCamaraEnVivo() {
+        function iniciarEscanner() {
             if (escaneando) return;
 
             html5QrCode = new Html5Qrcode("reader");
 
-            // Configuración optimizada para lectura de códigos de barra lineales (1D)
+            // Configuración optimizada para lectura continua rápida y tipos de códigos de bodega
             const config = { 
-                fps: 25, 
-                qrbox: { width: 300, height: 110 },
+                fps: 30, 
+                qrbox: { width: 280, height: 110 },
                 aspectRatio: 1.777778,
                 formatsToSupport: [
                     Html5QrcodeSupportedFormats.CODE_128,
                     Html5QrcodeSupportedFormats.EAN_13,
                     Html5QrcodeSupportedFormats.EAN_8,
-                    Html5QrcodeSupportedFormats.CODE_39,
-                    Html5QrcodeSupportedFormats.UPC_A
+                    Html5QrcodeSupportedFormats.CODE_39
                 ]
             };
 
@@ -197,61 +195,64 @@
                 { facingMode: "environment" },
                 config,
                 (decodedText) => {
-                    // Solo procesa si el usuario acaba de presionar el botón
-                    if (permiteLectura) {
-                        permiteLectura = false; // Desactiva para no repetir lecturas por accidente
+                    if (!procesandoLectura) {
+                        procesandoLectura = true;
                         procesarLectura(decodedText);
                     }
                 },
                 (errorMessage) => {}
             ).then(() => {
                 escaneando = true;
+                document.getElementById('btnDetener').classList.remove('hidden');
+                document.getElementById('btnIniciar').classList.add('hidden');
             }).catch(err => {
-                console.error("Fallo al iniciar cámara primaria", err);
-                // Intento alternativo
-                html5QrCode.start({ facingMode: "user" }, config, (decodedText) => {
-                    if (permiteLectura) {
-                        permiteLectura = false;
-                        procesarLectura(decodedText);
-                    }
-                }, (e) => {}).then(() => { escaneando = true; });
+                console.error("Error al iniciar cámara trasera principal", err);
+                html5QrCode.start(
+                    { facingMode: "user" }, 
+                    config, 
+                    (decodedText) => {
+                        if (!procesandoLectura) {
+                            procesandoLectura = true;
+                            procesarLectura(decodedText);
+                        }
+                    }, 
+                    (err2) => {}
+                ).then(() => {
+                    escaneando = true;
+                    document.getElementById('btnDetener').classList.remove('hidden');
+                    document.getElementById('btnIniciar').classList.add('hidden');
+                }).catch(e => {
+                    alert("No se pudo acceder a la cámara. Verifique permisos.");
+                });
             });
         }
 
-        // Esta función se ejecuta al tocar "⚡ LEER CÓDIGO AHORA"
-        function activarLecturaBoton() {
-            permiteLectura = true;
-            
-            const btn = document.getElementById('btnDisparador');
-            btn.className = "w-full bg-amber-500 text-white font-bold py-2.5 px-3 rounded text-sm transition shadow flex items-center justify-center animate-pulse";
-            btn.innerHTML = "<span>🔍 Leyendo cuadro...</span>";
+        function detenerEscanner() {
+            if (html5QrCode && escaneando) {
+                html5QrCode.stop().then(() => {
+                    escaneando = false;
+                    document.getElementById('btnDetener').classList.add('hidden');
+                    document.getElementById('btnIniciar').classList.remove('hidden');
+                }).catch(err => console.error(err));
+            }
+        }
 
-            // Si en 3.5 segundos no logra leer un código claro en pantalla, se restaura
-            setTimeout(() => {
-                if (permiteLectura) {
-                    permiteLectura = false;
-                    btn.className = "w-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2.5 px-3 rounded text-sm transition shadow flex items-center justify-center";
-                    btn.innerHTML = "<span>⚡ LEER CÓDIGO AHORA</span>";
-                    
-                    const divResultado = document.getElementById('resultadoValidacion');
-                    divResultado.classList.remove('hidden');
-                    divResultado.className = "p-2 rounded text-center font-bold text-xs bg-amber-100 text-amber-800 border border-amber-400";
-                    divResultado.innerHTML = "⚠️ No se detectó código. Encuadre bien las barras y presione de nuevo.";
-                }
-            }, 3500);
+        function reiniciarEscanner() {
+            if (!escaneando) { 
+                procesandoLectura = false;
+                iniciarEscanner(); 
+            }
         }
 
         function procesarLectura(codigoLeido) {
-            // Restaurar estilo del botón
-            const btn = document.getElementById('btnDisparador');
-            btn.className = "w-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2.5 px-3 rounded text-sm transition shadow flex items-center justify-center";
-            btn.innerHTML = "<span>⚡ LEER CÓDIGO AHORA</span>";
-
             const divResultado = document.getElementById('resultadoValidacion');
             divResultado.classList.remove('hidden');
 
             let filtrados = obtenerRegistrosFiltrados();
-            if (filtrados.length === 0) return;
+            if (filtrados.length === 0) {
+                procesandoLectura = false;
+                return;
+            }
 
             let actualEsperado = filtrados[indiceActual];
             let coincideCodigo = actualEsperado.codigoEsperado.trim() === codigoLeido.trim();
@@ -261,6 +262,7 @@
                 divResultado.innerHTML = `✅ ¡CORRECTO!<br><span class="font-normal">Ubicación validada: ${actualEsperado.ubicacion}</span>`;
                 beep(600, 200);
                 
+                // Salto automático al siguiente registro transcurrido 1.5 segundos
                 setTimeout(() => {
                     siguienteRegistro();
                 }, 1500);
@@ -268,6 +270,11 @@
                 divResultado.className = "p-2 rounded text-center font-bold text-xs bg-red-100 text-red-800 border border-red-400";
                 divResultado.innerHTML = `❌ NO COINCIDE<br><span class="font-normal">Leído: ${codigoLeido} (Esperado: ${actualEsperado.codigoEsperado})</span>`;
                 beep(200, 400);
+
+                // Permitir reintentar después de 2 segundos si falló
+                setTimeout(() => {
+                    procesandoLectura = false;
+                }, 2000);
             }
         }
 
