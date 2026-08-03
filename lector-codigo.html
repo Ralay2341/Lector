@@ -21,7 +21,7 @@
         <div class="grid grid-cols-2 gap-2 mb-2 bg-slate-50 p-2.5 rounded-md border">
             <div>
                 <label class="block text-xs font-medium text-slate-700 mb-1">Rack:</label>
-                <select id="selectRack" onchange="actualizarUbicacionPantalla()" class="w-full rounded border-gray-300 p-1.5 text-sm border bg-white">
+                <select id="selectRack" onchange="reiniciarIndiceYActualizar()" class="w-full rounded border-gray-300 p-1.5 text-sm border bg-white">
                     <!-- Se generan del 01 al 15 dinámicamente -->
                 </select>
             </div>
@@ -31,15 +31,22 @@
             </div>
         </div>
 
-        <!-- 📍 UBICACIÓN EXACTA (Columna E) -->
-        <div class="bg-blue-50 border-l-4 border-blue-600 p-2 rounded mb-2">
-            <p class="text-[10px] font-bold text-blue-900">📍 UBICACIÓN A LEER (Columna E):</p>
-            <div id="lblUbicacionExacta" class="text-xs font-mono font-bold text-blue-700 bg-white p-1.5 rounded border border-blue-200 text-center mt-1">
-                Sincronice para ver ubicación
+        <!-- 📍 UBICACIÓN EXACTA Y BOTÓN SIGUIENTE -->
+        <div class="bg-blue-50 border-l-4 border-blue-600 p-2 rounded mb-2 flex justify-between items-center">
+            <div class="overflow-hidden mr-2 flex-1">
+                <p class="text-[10px] font-bold text-blue-900">📍 UBICACIÓN A LEER (<span id="contadorIndex">0/0</span>):</p>
+                <div id="lblUbicacionExacta" class="text-xs font-mono font-bold text-blue-700 bg-white p-1 rounded border border-blue-200 text-center mt-1 truncate">
+                    Sincronice para ver
+                </div>
             </div>
+            <!-- Botón Siguiente -->
+            <button onclick="siguienteRegistro()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded text-xs transition shadow flex flex-col items-center justify-center">
+                <span>Siguiente</span>
+                <span class="text-[10px]">➡</span>
+            </button>
         </div>
 
-        <button onclick="cargarDatosSheet()" class="w-full bg-blue-600 text-white font-bold py-1.5 px-3 rounded text-sm hover:bg-blue-700 transition mb-2">
+        <button onclick="cargarDatosSheet()" class="w-full bg-slate-700 text-white font-bold py-1.5 px-3 rounded text-sm hover:bg-slate-800 transition mb-2">
             🔄 Sincronizar / Cargar Datos
         </button>
 
@@ -57,7 +64,7 @@
             </div>
             
             <!-- Contenedor visible de la cámara optimizado -->
-            <div id="reader" class="w-full rounded border-2 border-dashed border-blue-400 overflow-hidden bg-black h-56"></div>
+            <div id="reader" class="w-full rounded border-2 border-dashed border-blue-400 overflow-hidden bg-black h-48"></div>
         </div>
 
         <!-- Resultados de Validación -->
@@ -70,6 +77,7 @@
         let datosSheet = [];
         let html5QrCode = null;
         let escaneando = false;
+        let indiceActual = 0; // Controla el registro actual de la lista filtrada
 
         const selectRack = document.getElementById('selectRack');
         for (let i = 1; i <= 15; i++) {
@@ -80,27 +88,59 @@
             selectRack.appendChild(opt);
         }
 
-        function actualizarUbicacionPantalla() {
+        function reiniciarIndiceYActualizar() {
+            indiceActual = 0;
+            actualizarUbicacionPantalla();
+        }
+
+        function obtenerRegistrosFiltrados() {
             const rackSel = document.getElementById('selectRack').value;
             const nivelSel = document.getElementById('inputNivel').value;
-            const lblUbicacion = document.getElementById('lblUbicacionExacta');
 
-            if (datosSheet.length === 0) {
-                lblUbicacion.textContent = `Sincronice para ver (Rack -${rackSel}- Nivel ${nivelSel})`;
-                return;
-            }
+            if (datosSheet.length === 0) return [];
 
-            let encontrada = datosSheet.find(row => {
+            return datosSheet.filter(row => {
                 let esPicking = row.tipo && row.tipo.toUpperCase() === "PICKING";
                 let esNivelA = row.nivel && row.nivel.toUpperCase() === nivelSel.toUpperCase();
                 let perteneceRack = row.ubicacion && row.ubicacion.includes(`-${rackSel}-`);
                 return esPicking && esNivelA && perteneceRack;
             });
+        }
 
-            if (encontrada) {
-                lblUbicacion.textContent = encontrada.ubicacion;
+        function actualizarUbicacionPantalla() {
+            const lblUbicacion = document.getElementById('lblUbicacionExacta');
+            const lblContador = document.getElementById('contadorIndex');
+            const rackSel = document.getElementById('selectRack').value;
+
+            if (datosSheet.length === 0) {
+                lblUbicacion.textContent = `Sincronice para ver (Rack ${rackSel})`;
+                lblContador.textContent = "0/0";
+                return;
+            }
+
+            let filtrados = obtenerRegistrosFiltrados();
+
+            if (filtrados.length > 0) {
+                // Asegurar que el índice no esté fuera de rango
+                if (indiceActual >= filtrados.length) {
+                    indiceActual = 0;
+                }
+                let actual = filtrados[indiceActual];
+                lblUbicacion.textContent = actual.ubicacion;
+                lblContador.textContent = `${indiceActual + 1}/${filtrados.length}`;
             } else {
-                lblUbicacion.textContent = `⚠️ Sin registro PICKING para Rack ${rackSel}`;
+                lblUbicacion.textContent = `⚠️ Sin registros para Rack ${rackSel}`;
+                lblContador.textContent = "0/0";
+            }
+        }
+
+        function siguienteRegistro() {
+            let filtrados = obtenerRegistrosFiltrados();
+            if (filtrados.length > 0) {
+                indiceActual = (indiceActual + 1) % filtrados.length; // Rota al inicio si llega al final
+                actualizarUbicacionPantalla();
+                // Limpiar mensaje de resultado anterior al cambiar
+                document.getElementById('resultadoValidacion').classList.add('hidden');
             }
         }
 
@@ -116,6 +156,7 @@
                 status.textContent = `✅ Cargado (${datosSheet.length} registros)`;
                 status.className = "text-center text-xs font-semibold mb-2 text-green-600";
                 
+                indiceActual = 0;
                 actualizarUbicacionPantalla();
 
                 document.getElementById('seccionEscaneo').classList.remove('hidden');
@@ -131,15 +172,12 @@
             if (escaneando) return;
 
             html5QrCode = new Html5Qrcode("reader");
-            
-            // Área de escaneo más amplia (qrbox) para facilitar la lectura del código de barras
             const config = { 
                 fps: 20, 
-                qrbox: { width: 300, height: 140 },
+                qrbox: { width: 280, height: 120 },
                 aspectRatio: 1.777778
             };
 
-            // Forzar cámara trasera principal para mejor enfoque
             html5QrCode.start(
                 { facingMode: "environment" },
                 config,
@@ -150,8 +188,6 @@
                 document.getElementById('btnDetener').classList.remove('hidden');
                 document.getElementById('btnIniciar').classList.add('hidden');
             }).catch(err => {
-                console.error("Error al iniciar cámara principal, intentando alternativa...", err);
-                // Intento alternativo genérico si falla el environment exacto
                 html5QrCode.start(
                     { facingMode: "user" }, 
                     config, 
@@ -182,28 +218,27 @@
         }
 
         function procesarLectura(codigoLeido) {
-            const rackSeleccionado = document.getElementById('selectRack').value;
-            const nivelSeleccionado = document.getElementById('inputNivel').value;
             const divResultado = document.getElementById('resultadoValidacion');
-
             divResultado.classList.remove('hidden');
 
-            let encontrado = datosSheet.find(row => {
-                let esPicking = row.tipo.toUpperCase() === "PICKING";
-                let esNivelA = row.nivel.toUpperCase() === nivelSeleccionado.toUpperCase();
-                let perteneceRack = row.ubicacion.includes(`-${rackSeleccionado}-`); 
-                let coincideCodigo = row.codigoEsperado.trim() === codigoLeido.trim();
+            let filtrados = obtenerRegistrosFiltrados();
+            if (filtrados.length === 0) return;
 
-                return esPicking && esNivelA && perteneceRack && coincideCodigo;
-            });
+            let actualEsperado = filtrados[indiceActual];
+            let coincideCodigo = actualEsperado.codigoEsperado.trim() === codigoLeido.trim();
 
-            if (encontrado) {
+            if (coincideCodigo) {
                 divResultado.className = "p-2 rounded text-center font-bold text-xs bg-green-100 text-green-800 border border-green-400";
-                divResultado.innerHTML = `✅ ¡CORRECTO!<br><span class="font-normal">Ubicación: ${encontrado.ubicacion}</span>`;
+                divResultado.innerHTML = `✅ ¡CORRECTO!<br><span class="font-normal">Ubicación validada: ${actualEsperado.ubicacion}</span>`;
                 beep(600, 200);
+                
+                // Opcional: Avanzar automáticamente al siguiente tras 1.5 segundos de acierto
+                setTimeout(() => {
+                    siguienteRegistro();
+                }, 1500);
             } else {
                 divResultado.className = "p-2 rounded text-center font-bold text-xs bg-red-100 text-red-800 border border-red-400";
-                divResultado.innerHTML = `❌ NO COINCIDE<br><span class="font-normal">Leído: ${codigoLeido}</span>`;
+                divResultado.innerHTML = `❌ NO COINCIDE<br><span class="font-normal">Leído: ${codigoLeido} (Esperado para ${actualEsperado.ubicacion})</span>`;
                 beep(200, 400);
             }
         }
