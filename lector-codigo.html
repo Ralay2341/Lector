@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -31,12 +30,17 @@
                 <input type="text" id="inputNivel" value="A" readonly class="mt-1 block w-full bg-gray-100 rounded-md border-gray-300 p-2 border font-bold text-center">
             </div>
 
-            <!-- 📍 NUEVO: Indicador visual en pantalla de la ubicación exacta que busca en Google Sheets -->
-            <div id="panelUbicacion" class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-md text-xs text-blue-900 shadow-xs">
-                <p class="font-bold mb-1">📍 Ubicación lógica en Google Sheets:</p>
-                <p>• Tipo requerido: <span class="font-semibold">PICKING</span> (Columna K)</p>
-                <p>• Nivel requerido: <span id="lblNivel" class="font-semibold">A</span> (Columna J)</p>
-                <p>• Patrón de Rack: <span id="lblRack" class="font-semibold">-01-</span> (Columna E)</p>
+            <!-- 📍 NUEVO: Posición de picking a leer según el Rack seleccionado, con botón Siguiente -->
+            <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md flex justify-between items-center gap-2">
+                <div class="overflow-hidden flex-1">
+                    <p class="text-[11px] font-bold text-amber-900">🎯 POSICIÓN A LEER (<span id="contadorIndex">0/0</span>):</p>
+                    <div id="lblUbicacionExacta" class="text-xs font-mono font-bold text-amber-800 bg-white p-1.5 rounded border border-amber-200 text-center mt-1 truncate">
+                        Sincronice para ver
+                    </div>
+                </div>
+                <button onclick="siguienteRegistro()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-2 rounded-lg text-xs transition shadow whitespace-nowrap">
+                    Siguiente ➡
+                </button>
             </div>
 
             <button onclick="cargarDatosSheet()" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">
@@ -70,6 +74,7 @@
         let datosSheet = [];
         let html5QrCode = null;
         let escaneando = false;
+        let indiceActual = 0; // 📍 NUEVO: controla el registro actual a leer dentro del Rack/Nivel seleccionado
 
         // Poblar Racks del 01 al 15 con formato de 2 dígitos
         const selectRack = document.getElementById('selectRack');
@@ -83,15 +88,65 @@
 
         // Actualiza dinámicamente el cuadro de ubicación visual en pantalla
         function actualizarInfoUbicacion() {
-            const rackVal = document.getElementById('selectRack').value;
-            const nivelVal = document.getElementById('inputNivel').value;
-            
-            document.getElementById('lblRack').textContent = `-${rackVal}-`;
-            document.getElementById('lblNivel').textContent = nivelVal;
+            // 📍 NUEVO: al cambiar de rack, se reinicia la posición a leer
+            indiceActual = 0;
+            actualizarUbicacionPantalla();
         }
 
         // Ejecutar al cambiar el selector
         document.getElementById('selectRack').addEventListener('change', actualizarInfoUbicacion);
+
+        // 📍 NUEVO: obtiene los registros PICKING del Rack/Nivel seleccionados
+        function obtenerRegistrosFiltrados() {
+            const rackSel = document.getElementById('selectRack').value;
+            const nivelSel = document.getElementById('inputNivel').value;
+
+            if (datosSheet.length === 0) return [];
+
+            return datosSheet.filter(row => {
+                let esPicking = row.tipo && row.tipo.toUpperCase() === "PICKING";
+                let esNivelA = row.nivel && row.nivel.toUpperCase() === nivelSel.toUpperCase();
+                let perteneceRack = row.ubicacion && row.ubicacion.includes(`-${rackSel}-`);
+                return esPicking && esNivelA && perteneceRack;
+            });
+        }
+
+        // 📍 NUEVO: muestra en pantalla la posición actual a leer y el contador
+        function actualizarUbicacionPantalla() {
+            const lblUbicacion = document.getElementById('lblUbicacionExacta');
+            const lblContador = document.getElementById('contadorIndex');
+            const rackSel = document.getElementById('selectRack').value;
+
+            if (datosSheet.length === 0) {
+                lblUbicacion.textContent = `Sincronice para ver (Rack ${rackSel})`;
+                lblContador.textContent = "0/0";
+                return;
+            }
+
+            let filtrados = obtenerRegistrosFiltrados();
+
+            if (filtrados.length > 0) {
+                if (indiceActual >= filtrados.length) {
+                    indiceActual = 0;
+                }
+                let actual = filtrados[indiceActual];
+                lblUbicacion.textContent = actual.ubicacion;
+                lblContador.textContent = `${indiceActual + 1}/${filtrados.length}`;
+            } else {
+                lblUbicacion.textContent = `⚠️ Sin registros para Rack ${rackSel}`;
+                lblContador.textContent = "0/0";
+            }
+        }
+
+        // 📍 NUEVO: avanza al siguiente registro a verificar
+        function siguienteRegistro() {
+            let filtrados = obtenerRegistrosFiltrados();
+            if (filtrados.length > 0) {
+                indiceActual = (indiceActual + 1) % filtrados.length;
+                actualizarUbicacionPantalla();
+                document.getElementById('resultadoValidacion').classList.add('hidden');
+            }
+        }
 
         async function cargarDatosSheet() {
             const status = document.getElementById('statusCarga');
@@ -104,6 +159,10 @@
                 
                 status.textContent = `✅ Datos cargados (${datosSheet.length} registros desde fila 5)`;
                 status.className = "text-center text-sm font-semibold mb-4 text-green-600";
+
+                // 📍 NUEVO: al sincronizar, se muestra la primera posición a leer
+                indiceActual = 0;
+                actualizarUbicacionPantalla();
                 
                 document.getElementById('seccionEscaneo').classList.remove('hidden');
                 iniciarEscanner();
