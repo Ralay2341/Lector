@@ -8,40 +8,26 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Librería para escanear códigos de barras -->
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <style>
-        /* Estilo para resaltar la zona de lectura dentro del video */
-        #reader__scan_region {
-            background: rgba(0, 0, 0, 0.1);
-        }
-    </style>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center p-2">
 
-    <div class="w-full max-w-md bg-white rounded-lg shadow-md p-3">
-        <!-- Encabezado ultra compacto -->
-        <h2 class="text-lg font-bold text-slate-800 text-center">📦 Validador de Picking</h2>
+    <div class="w-full max-w-md bg-white rounded-lg shadow-md p-4">
+        <!-- Encabezado compacto -->
+        <h2 class="text-xl font-bold text-slate-800 text-center">📦 Validador de Picking</h2>
+        <p class="text-[11px] text-gray-500 text-center mb-3">Validación con Cámara y Google Sheets</p>
 
-        <!-- 🎛️ MENÚ DE ACCESO SUBIDO (Rack, Nivel y Sincronizar) -->
-        <div class="bg-slate-50 p-2 rounded-md border my-2">
-            <div class="grid grid-cols-2 gap-2 mb-2">
-                <div>
-                    <label class="block text-[11px] font-medium text-slate-700 mb-0.5">Rack:</label>
-                    <select id="selectRack" onchange="reiniciarIndiceYActualizar()" class="w-full rounded border-gray-300 p-1 text-xs border bg-white font-bold">
-                        <!-- Se generan del 01 al 15 dinámicamente -->
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[11px] font-medium text-slate-700 mb-0.5">Nivel:</label>
-                    <input type="text" id="inputNivel" value="A" readonly class="w-full bg-gray-200 rounded border-gray-300 p-1 text-xs border font-bold text-center">
-                </div>
+        <!-- Configuración inicial en 2 columnas -->
+        <div class="grid grid-cols-2 gap-2 mb-2 bg-slate-50 p-2.5 rounded-md border">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Rack:</label>
+                <select id="selectRack" onchange="reiniciarIndiceYActualizar()" class="w-full rounded border-gray-300 p-1.5 text-sm border bg-white">
+                    <!-- Se generan del 01 al 15 dinámicamente -->
+                </select>
             </div>
-
-            <button onclick="cargarDatosSheet()" class="w-full bg-slate-700 text-white font-bold py-1.5 px-3 rounded text-xs hover:bg-slate-800 transition shadow-sm">
-                🔄 Sincronizar / Cargar Datos
-            </button>
-            
-            <!-- Estado de carga -->
-            <div id="statusCarga" class="text-center text-[10px] font-semibold mt-1 text-gray-500">Datos no sincronizados</div>
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Nivel:</label>
+                <input type="text" id="inputNivel" value="A" readonly class="w-full bg-gray-200 rounded border-gray-300 p-1.5 text-sm border font-bold text-center">
+            </div>
         </div>
 
         <!-- 📍 UBICACIÓN EXACTA Y BOTÓN SIGUIENTE -->
@@ -59,22 +45,29 @@
             </button>
         </div>
 
-        <!-- Sección de Escaneo con Cámara en Vivo -->
-        <div id="seccionEscaneo" class="hidden mb-1">
+        <button onclick="cargarDatosSheet()" class="w-full bg-slate-700 text-white font-bold py-1.5 px-3 rounded text-sm hover:bg-slate-800 transition mb-2">
+            🔄 Sincronizar / Cargar Datos
+        </button>
+
+        <!-- Estado de carga -->
+        <div id="statusCarga" class="text-center text-xs font-semibold mb-2 text-gray-500">Datos no sincronizados</div>
+
+        <!-- Sección de Escaneo con Cámara -->
+        <div id="seccionEscaneo" class="hidden mb-2">
             <div class="mb-1 flex justify-between items-center">
-                <span class="text-xs font-medium text-slate-700">📷 Escáner en Vivo:</span>
+                <span class="text-xs font-medium text-slate-700">📷 Cuadro de Escaneo:</span>
                 <div>
-                    <button onclick="detenerEscanner()" id="btnDetener" class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded hidden font-bold shadow-sm">Apagar</button>
-                    <button onclick="reiniciarEscanner()" id="btnIniciar" class="text-[10px] bg-green-100 text-green-600 px-2 py-0.5 rounded font-bold shadow-sm">Encender</button>
+                    <button onclick="detenerEscanner()" id="btnDetener" class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded hidden font-bold">Apagar</button>
+                    <button onclick="reiniciarEscanner()" id="btnIniciar" class="text-[10px] bg-green-100 text-green-600 px-2 py-0.5 rounded font-bold">Encender</button>
                 </div>
             </div>
             
-            <!-- Visor de la cámara en vivo -->
-            <div id="reader" class="w-full rounded border-2 border-dashed border-blue-400 overflow-hidden bg-black h-44"></div>
+            <!-- Contenedor visible de la cámara optimizado -->
+            <div id="reader" class="w-full rounded border-2 border-dashed border-blue-400 overflow-hidden bg-black h-48"></div>
         </div>
 
         <!-- Resultados de Validación -->
-        <div id="resultadoValidacion" class="p-2 rounded hidden text-center font-bold text-xs mt-1"></div>
+        <div id="resultadoValidacion" class="p-2 rounded hidden text-center font-bold text-xs"></div>
     </div>
 
     <script>
@@ -83,8 +76,7 @@
         let datosSheet = [];
         let html5QrCode = null;
         let escaneando = false;
-        let indiceActual = 0;
-        let procesandoLectura = false;
+        let indiceActual = 0; // Controla el registro actual de la lista filtrada
 
         const selectRack = document.getElementById('selectRack');
         for (let i = 1; i <= 15; i++) {
@@ -128,6 +120,7 @@
             let filtrados = obtenerRegistrosFiltrados();
 
             if (filtrados.length > 0) {
+                // Asegurar que el índice no esté fuera de rango
                 if (indiceActual >= filtrados.length) {
                     indiceActual = 0;
                 }
@@ -143,24 +136,24 @@
         function siguienteRegistro() {
             let filtrados = obtenerRegistrosFiltrados();
             if (filtrados.length > 0) {
-                indiceActual = (indiceActual + 1) % filtrados.length;
+                indiceActual = (indiceActual + 1) % filtrados.length; // Rota al inicio si llega al final
                 actualizarUbicacionPantalla();
+                // Limpiar mensaje de resultado anterior al cambiar
                 document.getElementById('resultadoValidacion').classList.add('hidden');
-                procesandoLectura = false;
             }
         }
 
         async function cargarDatosSheet() {
             const status = document.getElementById('statusCarga');
             status.textContent = "Conectando...";
-            status.className = "text-center text-[10px] font-semibold mt-1 text-blue-600";
+            status.className = "text-center text-xs font-semibold mb-2 text-blue-600";
 
             try {
                 let response = await fetch(WEB_APP_URL);
                 datosSheet = await response.json();
                 
                 status.textContent = `✅ Cargado (${datosSheet.length} registros)`;
-                status.className = "text-center text-[10px] font-semibold mt-1 text-green-600";
+                status.className = "text-center text-xs font-semibold mb-2 text-green-600";
                 
                 indiceActual = 0;
                 actualizarUbicacionPantalla();
@@ -170,36 +163,40 @@
             } catch (error) {
                 console.error(error);
                 status.textContent = "❌ Error al cargar datos.";
-                status.className = "text-center text-[10px] font-semibold mt-1 text-red-600";
+                status.className = "text-center text-xs font-semibold mb-2 text-red-600";
             }
         }
 
         function iniciarEscanner() {
             if (escaneando) return;
 
-            html5QrCode = new Html5Qrcode("reader");
-
-            const config = { 
-                fps: 30, 
-                qrbox: { width: 280, height: 100 },
-                aspectRatio: 1.777778,
+            // Se indican explícitamente los formatos de código de barras de productos
+            // físicos (EAN/UPC/Code128/Code39) además de QR. Esto acelera la detección
+            // y evita falsos negativos al no forzar a la librería a probar todos los
+            // formatos posibles en cada frame.
+            html5QrCode = new Html5Qrcode("reader", {
                 formatsToSupport: [
-                    Html5QrcodeSupportedFormats.CODE_128,
                     Html5QrcodeSupportedFormats.EAN_13,
                     Html5QrcodeSupportedFormats.EAN_8,
-                    Html5QrcodeSupportedFormats.CODE_39
-                ]
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E,
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.QR_CODE
+                ],
+                verbose: false
+            });
+
+            const config = { 
+                fps: 20, 
+                qrbox: { width: 280, height: 120 },
+                aspectRatio: 1.777778
             };
 
             html5QrCode.start(
                 { facingMode: "environment" },
                 config,
-                (decodedText) => {
-                    if (!procesandoLectura) {
-                        procesandoLectura = true;
-                        procesarLectura(decodedText);
-                    }
-                },
+                (decodedText) => { procesarLectura(decodedText); },
                 (errorMessage) => {}
             ).then(() => {
                 escaneando = true;
@@ -209,19 +206,14 @@
                 html5QrCode.start(
                     { facingMode: "user" }, 
                     config, 
-                    (decodedText) => {
-                        if (!procesandoLectura) {
-                            procesandoLectura = true;
-                            procesarLectura(decodedText);
-                        }
-                    }, 
+                    (decodedText) => { procesarLectura(decodedText); },
                     (err2) => {}
                 ).then(() => {
                     escaneando = true;
                     document.getElementById('btnDetener').classList.remove('hidden');
                     document.getElementById('btnIniciar').classList.add('hidden');
                 }).catch(e => {
-                    alert("No se pudo acceder a la cámara.");
+                    alert("No se pudo acceder a la cámara. Verifique permisos HTTPS.");
                 });
             });
         }
@@ -237,10 +229,7 @@
         }
 
         function reiniciarEscanner() {
-            if (!escaneando) { 
-                procesandoLectura = false;
-                iniciarEscanner(); 
-            }
+            if (!escaneando) { iniciarEscanner(); }
         }
 
         function procesarLectura(codigoLeido) {
@@ -248,30 +237,29 @@
             divResultado.classList.remove('hidden');
 
             let filtrados = obtenerRegistrosFiltrados();
-            if (filtrados.length === 0) {
-                procesandoLectura = false;
-                return;
-            }
+            if (filtrados.length === 0) return;
 
             let actualEsperado = filtrados[indiceActual];
-            let coincideCodigo = actualEsperado.codigoEsperado.trim() === codigoLeido.trim();
+
+            // Normaliza ambos códigos: quita espacios y compara solo dígitos/letras.
+            // Esto evita falsos "NO COINCIDE" cuando el Sheet trae el código con
+            // ceros a la izquierda distintos o espacios invisibles.
+            const normalizar = (str) => (str || "").toString().trim().replace(/\s+/g, "");
+            let coincideCodigo = normalizar(actualEsperado.codigoEsperado) === normalizar(codigoLeido);
 
             if (coincideCodigo) {
                 divResultado.className = "p-2 rounded text-center font-bold text-xs bg-green-100 text-green-800 border border-green-400";
                 divResultado.innerHTML = `✅ ¡CORRECTO!<br><span class="font-normal">Ubicación validada: ${actualEsperado.ubicacion}</span>`;
                 beep(600, 200);
                 
+                // Opcional: Avanzar automáticamente al siguiente tras 1.5 segundos de acierto
                 setTimeout(() => {
                     siguienteRegistro();
                 }, 1500);
             } else {
                 divResultado.className = "p-2 rounded text-center font-bold text-xs bg-red-100 text-red-800 border border-red-400";
-                divResultado.innerHTML = `❌ NO COINCIDE<br><span class="font-normal">Leído: ${codigoLeido} (Esperado: ${actualEsperado.codigoEsperado})</span>`;
+                divResultado.innerHTML = `❌ NO COINCIDE<br><span class="font-normal">Leído: ${codigoLeido} (Esperado para ${actualEsperado.ubicacion})</span>`;
                 beep(200, 400);
-
-                setTimeout(() => {
-                    procesandoLectura = false;
-                }, 2000);
             }
         }
 
