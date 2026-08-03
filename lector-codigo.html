@@ -184,13 +184,22 @@
                     Html5QrcodeSupportedFormats.CODE_39,
                     Html5QrcodeSupportedFormats.QR_CODE
                 ],
+                // Usa el BarcodeDetector nativo del navegador/SO cuando está disponible
+                // (Chrome en Android). Es mucho más rápido y preciso leyendo EAN-13 que
+                // el decoder JS interno de la librería, que es débil con códigos 1D.
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true
+                },
                 verbose: false
             });
 
             const config = { 
-                fps: 20, 
-                qrbox: { width: 280, height: 120 },
-                aspectRatio: 1.777778
+                fps: 15,
+                // Caja más ancha y baja: un EAN-13 es un rectángulo horizontal,
+                // no un cuadrado como el QR. Esto facilita el encuadre del producto.
+                qrbox: { width: 300, height: 100 },
+                aspectRatio: 1.777778,
+                disableFlip: false
             };
 
             html5QrCode.start(
