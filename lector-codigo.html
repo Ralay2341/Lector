@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Validador de Picking - Bodega</title>
     <!-- Tailwind CSS para diseño moderno -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script> <!-- O tu CDN preferida de Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Librería para escanear códigos de barras con la cámara -->
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -21,7 +20,7 @@
         <div class="space-y-4 mb-6 bg-slate-50 p-4 rounded-lg border">
             <div>
                 <label class="block text-sm font-medium text-slate-700">Seleccione Rack:</label>
-                <select id="selectRack" onchange="actualizarInfoUbicacion()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                <select id="selectRack" onchange="actualizarUbicacionPantalla()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
                     <!-- Se generan del 01 al 15 dinámicamente -->
                 </select>
             </div>
@@ -31,12 +30,12 @@
                 <input type="text" id="inputNivel" value="A" readonly class="mt-1 block w-full bg-gray-100 rounded-md border-gray-300 p-2 border font-bold text-center">
             </div>
 
-            <!-- 📍 NUEVO: Indicador visual en pantalla de la ubicación exacta que busca en Google Sheets -->
-            <div id="panelUbicacion" class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-md text-xs text-blue-900 shadow-xs">
-                <p class="font-bold mb-1">📍 Ubicación lógica en Google Sheets:</p>
-                <p>• Tipo requerido: <span class="font-semibold">PICKING</span> (Columna K)</p>
-                <p>• Nivel requerido: <span id="lblNivel" class="font-semibold">A</span> (Columna J)</p>
-                <p>• Patrón de Rack: <span id="lblRack" class="font-semibold">-01-</span> (Columna E)</p>
+            <!-- 📍 UBICACIÓN EXACTA QUE DEBE LEER (Basada en Columna E y Nivel A) -->
+            <div class="bg-blue-50 border-l-4 border-blue-600 p-3 rounded-md shadow-xs">
+                <p class="text-xs font-bold text-blue-900 mb-1">📍 UBICACIÓN DE PICKING A LEER (Columna E):</p>
+                <div id="lblUbicacionExacta" class="text-sm font-mono font-bold text-blue-700 bg-white p-2 rounded border border-blue-200 text-center">
+                    Cargando ubicación...
+                </div>
             </div>
 
             <button onclick="cargarDatosSheet()" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">
@@ -81,17 +80,32 @@
             selectRack.appendChild(opt);
         }
 
-        // Actualiza dinámicamente el cuadro de ubicación visual en pantalla
-        function actualizarInfoUbicacion() {
-            const rackVal = document.getElementById('selectRack').value;
-            const nivelVal = document.getElementById('inputNivel').value;
-            
-            document.getElementById('lblRack').textContent = `-${rackVal}-`;
-            document.getElementById('lblNivel').textContent = nivelVal;
-        }
+        // Función para buscar en los datos cargados la ubicación exacta (Columna E) que coincide con el Rack y Nivel A
+        function actualizarUbicacionPantalla() {
+            const rackSel = document.getElementById('selectRack').value; // Ej: "02"
+            const nivelSel = document.getElementById('inputNivel').value; // "A"
+            const lblUbicacion = document.getElementById('lblUbicacionExacta');
 
-        // Ejecutar al cambiar el selector
-        document.getElementById('selectRack').addEventListener('change', actualizarInfoUbicacion);
+            if (datosSheet.length === 0) {
+                lblUbicacion.textContent = `Sincronice para ver ubicación (Rack -${rackSel}- Nivel ${nivelSel})`;
+                return;
+            }
+
+            // Buscar en el array la primera coincidencia que sea PICKING, nivel A y pertenezca al rack seleccionado
+            let encontrada = datosSheet.find(row => {
+                let esPicking = row.tipo && row.tipo.toUpperCase() === "PICKING";
+                let esNivelA = row.nivel && row.nivel.toUpperCase() === nivelSel.toUpperCase();
+                let perteneceRack = row.ubicacion && row.ubicacion.includes(`-${rackSel}-`);
+                return esPicking && esNivelA && perteneceRack;
+            });
+
+            if (encontrada) {
+                // Muestra la ubicación exacta obtenida de la Columna E (ej: ALM9037-02-35-A)
+                lblUbicacion.textContent = encontrada.ubicacion;
+            } else {
+                lblUbicacion.textContent = `⚠️ No hay registro PICKING para Rack ${rackSel} - Nivel ${nivelSel}`;
+            }
+        }
 
         async function cargarDatosSheet() {
             const status = document.getElementById('statusCarga');
@@ -102,9 +116,12 @@
                 let response = await fetch(WEB_APP_URL);
                 datosSheet = await response.json();
                 
-                status.textContent = `✅ Datos cargados (${datosSheet.length} registros desde fila 5)`;
+                status.textContent = `✅ Datos cargados (${datosSheet.length} registros)`;
                 status.className = "text-center text-sm font-semibold mb-4 text-green-600";
                 
+                // Actualiza el indicador visual de ubicación apenas carguen los datos
+                actualizarUbicacionPantalla();
+
                 document.getElementById('seccionEscaneo').classList.remove('hidden');
                 iniciarEscanner();
             } catch (error) {
@@ -125,21 +142,19 @@
             };
 
             html5QrCode.start(
-                { facingMode: "environment" }, // Usa la cámara trasera del celular
+                { facingMode: "environment" },
                 config,
                 (decodedText) => {
                     procesarLectura(decodedText);
                 },
-                (errorMessage) => {
-                    // Errores de escaneo continuo se omiten intencionalmente
-                }
+                (errorMessage) => {}
             ).then(() => {
                 escaneando = true;
                 document.getElementById('btnDetener').classList.remove('hidden');
                 document.getElementById('btnIniciar').classList.add('hidden');
             }).catch(err => {
                 console.error("No se pudo iniciar la cámara", err);
-                alert("No se pudo acceder a la cámara. Asegúrese de dar permisos de cámara a su navegador (Chrome/Safari).");
+                alert("No se pudo acceder a la cámara. Asegúrese de dar permisos de cámara a su navegador.");
             });
         }
 
@@ -178,11 +193,11 @@
 
             if (encontrado) {
                 divResultado.className = "mt-4 p-4 rounded-lg text-center font-bold text-lg bg-green-100 text-green-800 border border-green-400";
-                divResultado.innerHTML = `✅ ¡CORRECTO!<br><span class="text-sm font-normal">Fila ${encontrado.fila} | Ubicación: ${encontrado.ubicacion}</span>`;
+                divResultado.innerHTML = `✅ ¡CORRECTO!<br><span class="text-sm font-normal">Ubicación leída: ${encontrado.ubicacion}</span>`;
                 beep(600, 200);
             } else {
                 divResultado.className = "mt-4 p-4 rounded-lg text-center font-bold text-lg bg-red-100 text-red-800 border border-red-400";
-                divResultado.innerHTML = `❌ NO COINCIDE O NO ES PICKING<br><span class="text-sm font-normal">Código leído: ${codigoLeido}<br>Rack: ${rackSeleccionado} | Nivel: ${nivelSeleccionado}</span>`;
+                divResultado.innerHTML = `❌ NO COINCIDE<br><span class="text-sm font-normal">Código escaneado: ${codigoLeido}</span>`;
                 beep(200, 400);
             }
         }
