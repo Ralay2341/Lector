@@ -17,23 +17,31 @@
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center p-2">
 
-    <div class="w-full max-w-md bg-white rounded-lg shadow-md p-4">
-        <!-- Encabezado -->
-        <h2 class="text-xl font-bold text-slate-800 text-center">📦 Validador de Picking</h2>
-        <p class="text-[11px] text-gray-500 text-center mb-3">Validación con Cámara en Vivo y Google Sheets</p>
+    <div class="w-full max-w-md bg-white rounded-lg shadow-md p-3">
+        <!-- Encabezado ultra compacto -->
+        <h2 class="text-lg font-bold text-slate-800 text-center">📦 Validador de Picking</h2>
 
-        <!-- Configuración inicial en 2 columnas -->
-        <div class="grid grid-cols-2 gap-2 mb-2 bg-slate-50 p-2.5 rounded-md border">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Rack:</label>
-                <select id="selectRack" onchange="reiniciarIndiceYActualizar()" class="w-full rounded border-gray-300 p-1.5 text-sm border bg-white">
-                    <!-- Se generan del 01 al 15 dinámicamente -->
-                </select>
+        <!-- 🎛️ MENÚ DE ACCESO SUBIDO (Rack, Nivel y Sincronizar) -->
+        <div class="bg-slate-50 p-2 rounded-md border my-2">
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-700 mb-0.5">Rack:</label>
+                    <select id="selectRack" onchange="reiniciarIndiceYActualizar()" class="w-full rounded border-gray-300 p-1 text-xs border bg-white font-bold">
+                        <!-- Se generan del 01 al 15 dinámicamente -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-700 mb-0.5">Nivel:</label>
+                    <input type="text" id="inputNivel" value="A" readonly class="w-full bg-gray-200 rounded border-gray-300 p-1 text-xs border font-bold text-center">
+                </div>
             </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Nivel:</label>
-                <input type="text" id="inputNivel" value="A" readonly class="w-full bg-gray-200 rounded border-gray-300 p-1.5 text-sm border font-bold text-center">
-            </div>
+
+            <button onclick="cargarDatosSheet()" class="w-full bg-slate-700 text-white font-bold py-1.5 px-3 rounded text-xs hover:bg-slate-800 transition shadow-sm">
+                🔄 Sincronizar / Cargar Datos
+            </button>
+            
+            <!-- Estado de carga -->
+            <div id="statusCarga" class="text-center text-[10px] font-semibold mt-1 text-gray-500">Datos no sincronizados</div>
         </div>
 
         <!-- 📍 UBICACIÓN EXACTA Y BOTÓN SIGUIENTE -->
@@ -51,15 +59,8 @@
             </button>
         </div>
 
-        <button onclick="cargarDatosSheet()" class="w-full bg-slate-700 text-white font-bold py-1.5 px-3 rounded text-sm hover:bg-slate-800 transition mb-2">
-            🔄 Sincronizar / Cargar Datos
-        </button>
-
-        <!-- Estado de carga -->
-        <div id="statusCarga" class="text-center text-xs font-semibold mb-2 text-gray-500">Datos no sincronizados</div>
-
         <!-- Sección de Escaneo con Cámara en Vivo -->
-        <div id="seccionEscaneo" class="hidden mb-2">
+        <div id="seccionEscaneo" class="hidden mb-1">
             <div class="mb-1 flex justify-between items-center">
                 <span class="text-xs font-medium text-slate-700">📷 Escáner en Vivo:</span>
                 <div>
@@ -69,11 +70,11 @@
             </div>
             
             <!-- Visor de la cámara en vivo -->
-            <div id="reader" class="w-full rounded border-2 border-dashed border-blue-400 overflow-hidden bg-black h-48"></div>
+            <div id="reader" class="w-full rounded border-2 border-dashed border-blue-400 overflow-hidden bg-black h-44"></div>
         </div>
 
         <!-- Resultados de Validación -->
-        <div id="resultadoValidacion" class="p-2 rounded hidden text-center font-bold text-xs mt-2"></div>
+        <div id="resultadoValidacion" class="p-2 rounded hidden text-center font-bold text-xs mt-1"></div>
     </div>
 
     <script>
@@ -83,7 +84,7 @@
         let html5QrCode = null;
         let escaneando = false;
         let indiceActual = 0;
-        let procesandoLectura = false; // Evita lecturas duplicadas seguidas
+        let procesandoLectura = false;
 
         const selectRack = document.getElementById('selectRack');
         for (let i = 1; i <= 15; i++) {
@@ -152,14 +153,14 @@
         async function cargarDatosSheet() {
             const status = document.getElementById('statusCarga');
             status.textContent = "Conectando...";
-            status.className = "text-center text-xs font-semibold mb-2 text-blue-600";
+            status.className = "text-center text-[10px] font-semibold mt-1 text-blue-600";
 
             try {
                 let response = await fetch(WEB_APP_URL);
                 datosSheet = await response.json();
                 
                 status.textContent = `✅ Cargado (${datosSheet.length} registros)`;
-                status.className = "text-center text-xs font-semibold mb-2 text-green-600";
+                status.className = "text-center text-[10px] font-semibold mt-1 text-green-600";
                 
                 indiceActual = 0;
                 actualizarUbicacionPantalla();
@@ -169,7 +170,7 @@
             } catch (error) {
                 console.error(error);
                 status.textContent = "❌ Error al cargar datos.";
-                status.className = "text-center text-xs font-semibold mb-2 text-red-600";
+                status.className = "text-center text-[10px] font-semibold mt-1 text-red-600";
             }
         }
 
@@ -178,10 +179,9 @@
 
             html5QrCode = new Html5Qrcode("reader");
 
-            // Configuración optimizada para lectura continua rápida y tipos de códigos de bodega
             const config = { 
                 fps: 30, 
-                qrbox: { width: 280, height: 110 },
+                qrbox: { width: 280, height: 100 },
                 aspectRatio: 1.777778,
                 formatsToSupport: [
                     Html5QrcodeSupportedFormats.CODE_128,
@@ -206,7 +206,6 @@
                 document.getElementById('btnDetener').classList.remove('hidden');
                 document.getElementById('btnIniciar').classList.add('hidden');
             }).catch(err => {
-                console.error("Error al iniciar cámara trasera principal", err);
                 html5QrCode.start(
                     { facingMode: "user" }, 
                     config, 
@@ -222,7 +221,7 @@
                     document.getElementById('btnDetener').classList.remove('hidden');
                     document.getElementById('btnIniciar').classList.add('hidden');
                 }).catch(e => {
-                    alert("No se pudo acceder a la cámara. Verifique permisos.");
+                    alert("No se pudo acceder a la cámara.");
                 });
             });
         }
@@ -262,7 +261,6 @@
                 divResultado.innerHTML = `✅ ¡CORRECTO!<br><span class="font-normal">Ubicación validada: ${actualEsperado.ubicacion}</span>`;
                 beep(600, 200);
                 
-                // Salto automático al siguiente registro transcurrido 1.5 segundos
                 setTimeout(() => {
                     siguienteRegistro();
                 }, 1500);
@@ -271,7 +269,6 @@
                 divResultado.innerHTML = `❌ NO COINCIDE<br><span class="font-normal">Leído: ${codigoLeido} (Esperado: ${actualEsperado.codigoEsperado})</span>`;
                 beep(200, 400);
 
-                // Permitir reintentar después de 2 segundos si falló
                 setTimeout(() => {
                     procesandoLectura = false;
                 }, 2000);
