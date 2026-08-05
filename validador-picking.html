@@ -81,7 +81,7 @@
         let html5QrCode = null;
         let escaneando = false;
         let indiceActual = 0;
-        let listaErrores = []; // Registro local para el PDF
+        let listaErrores = []; // Registro local de errores únicos
 
         // Poblar Racks del 01 al 15
         const selectRack = document.getElementById('selectRack');
@@ -249,20 +249,28 @@
                     codigoEsperado: codigoDeberia
                 };
 
-                // 1. Guardar en arreglo local
-                listaErrores.push(errorObj);
+                // 📍 CONTROL DE DUPLICADOS POR UBICACIÓN
+                let indiceExistente = listaErrores.findIndex(err => err.ubicacion === lblUbicacion);
 
-                // 2. Guardar en la pestaña 'Errores_Picking'
-                fetch(WEB_APP_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(errorObj)
-                }).catch(err => console.error("Error guardando en la nube", err));
+                if (indiceExistente !== -1) {
+                    // Si la ubicación ya falló antes, actualiza la hora y el último código leído
+                    listaErrores[indiceExistente] = errorObj;
+                } else {
+                    // Si es un nuevo registro de error para esta ubicación, lo agrega
+                    listaErrores.push(errorObj);
+
+                    // Solo enviamos a Google Sheets si es una ubicación con error nueva
+                    fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify(errorObj)
+                    }).catch(err => console.error("Error guardando en la nube", err));
+                }
 
                 divResultado.className = "mt-4 p-4 rounded-lg text-center font-bold text-lg bg-red-100 text-red-800 border border-red-400";
                 divResultado.innerHTML = `❌ NO COINCIDE O NO ES PICKING<br><span class="text-sm font-normal">Código leído: ${codigoLeido}<br>Rack: ${rackSeleccionado} | Nivel: ${nivelSeleccionado}</span>`;
                 beep(200, 400);
 
-                // Mostrar botón de reporte
+                // Mostrar botón para descargar el reporte
                 document.getElementById('btnExportarPDF').classList.remove('hidden');
             }
         }
@@ -280,7 +288,7 @@
             doc.setFontSize(10);
             doc.setTextColor(100);
             doc.text(`Fecha del reporte: ${new Date().toLocaleString()}`, 14, 22);
-            doc.text(`Total Errores: ${listaErrores.length}`, 14, 27);
+            doc.text(`Total Ubicaciones con Error: ${listaErrores.length}`, 14, 27);
 
             const bodyTabla = listaErrores.map(item => [
                 item.fecha.split(', ')[1] || item.fecha,
