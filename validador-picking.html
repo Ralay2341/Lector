@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -106,7 +105,7 @@
             }
         }
 
-        // Cambio de Rack: Recarga de datos rápida filtrada desde el servidor
+        // Cambio de Rack: Solicita al servidor los datos exclusivos de ese Rack
         selectRack.addEventListener('change', () => {
             indiceActual = 0;
             if (datosSheet.length > 0) {
@@ -116,15 +115,22 @@
             }
         });
 
-        // Filtrado en cliente de Picking y Nivel A
+        // 📍 FILTRADO PARA NIVELES SIMPLES "A" Y DOBLES ("A1", "A2")
         function obtenerRegistrosFiltrados() {
-            const nivelSel = document.getElementById('inputNivel').value; // Ej: "A"
+            const nivelSel = document.getElementById('inputNivel').value.trim().toUpperCase(); // "A"
 
             if (datosSheet.length === 0) return [];
 
             return datosSheet.filter(row => {
-                let esPicking = row.tipo && row.tipo.toUpperCase() === "PICKING";
-                let esNivelA = row.nivel && row.nivel.toUpperCase() === nivelSel.toUpperCase();
+                let valTipo = row.tipo ? String(row.tipo).trim().toUpperCase() : "";
+                let valNivel = row.nivel ? String(row.nivel).trim().toUpperCase() : "";
+
+                // Permite tipos PICKING (o celdas sin definir)
+                let esPicking = valTipo === "" || valTipo.includes("PICKING");
+                
+                // Valida niveles A, A1, A2, etc., mediante startsWith("A")
+                let esNivelA = valNivel.startsWith(nivelSel);
+
                 return esPicking && esNivelA;
             });
         }
@@ -150,7 +156,7 @@
                 lblUbicacion.textContent = actual.ubicacion;
                 lblContador.textContent = `${indiceActual + 1}/${filtrados.length}`;
             } else {
-                lblUbicacion.textContent = `⚠️ Sin registros de Picking Nivel A para Rack ${rackSel}`;
+                lblUbicacion.textContent = `⚠️ Sin registros para Rack ${rackSel}`;
                 lblContador.textContent = "0/0";
             }
         }
@@ -166,7 +172,7 @@
             }
         }
 
-        // Carga ligera directa por Rack
+        // Carga ligera enviando parámetro del Rack a Apps Script
         async function cargarDatosSheet() {
             const status = document.getElementById('statusCarga');
             const rackSeleccionado = document.getElementById('selectRack').value;
@@ -243,15 +249,18 @@
             } catch(e) {}
 
             const rackSeleccionado = document.getElementById('selectRack').value;
-            const nivelSeleccionado = document.getElementById('inputNivel').value;
+            const nivelSeleccionado = document.getElementById('inputNivel').value.trim().toUpperCase();
             const divResultado = document.getElementById('resultadoValidacion');
             const lblUbicacion = document.getElementById('lblUbicacionExacta').textContent.trim();
 
             divResultado.classList.remove('hidden');
 
             let encontrado = datosSheet.find(row => {
-                let esPicking = row.tipo.toUpperCase() === "PICKING";
-                let esNivelA = row.nivel.toUpperCase() === nivelSeleccionado.toUpperCase();
+                let valTipo = row.tipo ? String(row.tipo).trim().toUpperCase() : "";
+                let valNivel = row.nivel ? String(row.nivel).trim().toUpperCase() : "";
+
+                let esPicking = valTipo === "" || valTipo.includes("PICKING");
+                let esNivelA = valNivel.startsWith(nivelSeleccionado);
                 let coincideCodigo = row.codigoEsperado.trim() === codigoLeido.trim();
 
                 return esPicking && esNivelA && coincideCodigo;
@@ -344,3 +353,4 @@
     </script>
 </body>
 </html>
+
