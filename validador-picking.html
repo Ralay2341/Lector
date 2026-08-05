@@ -4,11 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Validador de Picking - Bodega</title>
-    <!-- Tailwind CSS para diseño moderno -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script> <!-- O tu CDN preferida de Tailwind -->
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Librería para escanear códigos de barras con la cámara -->
+    <!-- Librería para escanear códigos de barras -->
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- Librerías para generación de PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body class="bg-slate-100 min-h-screen p-4">
 
@@ -20,7 +23,7 @@
         <div class="space-y-4 mb-6 bg-slate-50 p-4 rounded-lg border">
             <div>
                 <label class="block text-sm font-medium text-slate-700">Seleccione Rack:</label>
-                <select id="selectRack" onchange="actualizarInfoUbicacion()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                <select id="selectRack" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
                     <!-- Se generan del 01 al 15 dinámicamente -->
                 </select>
             </div>
@@ -30,7 +33,7 @@
                 <input type="text" id="inputNivel" value="A" readonly class="mt-1 block w-full bg-gray-100 rounded-md border-gray-300 p-2 border font-bold text-center">
             </div>
 
-            <!-- 📍 NUEVO: Posición de picking a leer según el Rack seleccionado, con botón Siguiente -->
+            <!-- Posición de picking a leer -->
             <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md flex justify-between items-center gap-2">
                 <div class="overflow-hidden flex-1">
                     <p class="text-[11px] font-bold text-amber-900">🎯 POSICIÓN A LEER (<span id="contadorIndex">0/0</span>):</p>
@@ -59,24 +62,28 @@
                 <button onclick="reiniciarEscanner()" id="btnIniciar" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded font-bold">Encender Cámara</button>
             </div>
             
-            <!-- Contenedor donde se dibuja la cámara -->
             <div id="reader" class="w-full rounded-lg overflow-hidden border mb-4 bg-black"></div>
         </div>
 
         <!-- Resultados de Validación -->
         <div id="resultadoValidacion" class="mt-4 p-4 rounded-lg hidden text-center font-bold text-lg"></div>
+
+        <!-- Botón para Generar y Descargar Reporte PDF -->
+        <button id="btnExportarPDF" onclick="descargarReportePDF()" class="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition hidden shadow-lg flex items-center justify-center gap-2">
+            📄 Descargar Reporte de Errores PDF
+        </button>
     </div>
 
     <script>
-        // ⚠️ REEMPLAZA ESTA URL CON TU LINK DE GOOGLE APPS SCRIPT
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzmLpCNBXQ34XaBpp0cmpGugOy3r3IB16elWGMH_UR7A3QOYc6vOZMAtxbU45mejsreuw/exec";
 
         let datosSheet = [];
         let html5QrCode = null;
         let escaneando = false;
-        let indiceActual = 0; // 📍 NUEVO: controla el registro actual a leer dentro del Rack/Nivel seleccionado
+        let indiceActual = 0;
+        let listaErrores = []; // Registro local para el PDF
 
-        // Poblar Racks del 01 al 15 con formato de 2 dígitos
+        // Poblar Racks del 01 al 15
         const selectRack = document.getElementById('selectRack');
         for (let i = 1; i <= 15; i++) {
             let numStr = i < 10 ? '0' + i : '' + i;
@@ -86,17 +93,13 @@
             selectRack.appendChild(opt);
         }
 
-        // Actualiza dinámicamente el cuadro de ubicación visual en pantalla
         function actualizarInfoUbicacion() {
-            // 📍 NUEVO: al cambiar de rack, se reinicia la posición a leer
             indiceActual = 0;
             actualizarUbicacionPantalla();
         }
 
-        // Ejecutar al cambiar el selector
         document.getElementById('selectRack').addEventListener('change', actualizarInfoUbicacion);
 
-        // 📍 NUEVO: obtiene los registros PICKING del Rack/Nivel seleccionados
         function obtenerRegistrosFiltrados() {
             const rackSel = document.getElementById('selectRack').value;
             const nivelSel = document.getElementById('inputNivel').value;
@@ -111,7 +114,6 @@
             });
         }
 
-        // 📍 NUEVO: muestra en pantalla la posición actual a leer y el contador
         function actualizarUbicacionPantalla() {
             const lblUbicacion = document.getElementById('lblUbicacionExacta');
             const lblContador = document.getElementById('contadorIndex');
@@ -138,7 +140,6 @@
             }
         }
 
-        // 📍 NUEVO: avanza al siguiente registro a verificar
         function siguienteRegistro() {
             let filtrados = obtenerRegistrosFiltrados();
             if (filtrados.length > 0) {
@@ -160,7 +161,6 @@
                 status.textContent = `✅ Datos cargados (${datosSheet.length} registros desde fila 5)`;
                 status.className = "text-center text-sm font-semibold mb-4 text-green-600";
 
-                // 📍 NUEVO: al sincronizar, se muestra la primera posición a leer
                 indiceActual = 0;
                 actualizarUbicacionPantalla();
                 
@@ -177,39 +177,28 @@
             if (escaneando) return;
 
             html5QrCode = new Html5Qrcode("reader", {
-                // Usa el BarcodeDetector nativo del navegador/SO cuando está disponible
-                // (Chrome en Android): decodifica en el motor nativo en vez de JS puro,
-                // notablemente más rápido para códigos de barras 1D como EAN-13.
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
-                },
+                experimentalFeatures: { useBarCodeDetectorIfSupported: true },
                 verbose: false
             });
             const config = { 
                 fps: 20,
-                // Caja más chica = menos píxeles a analizar por frame = detección más rápida
                 qrbox: { width: 260, height: 100 },
                 aspectRatio: 1.777778,
-                // No necesitamos espejar el video para código de barras: ahorra procesamiento
                 disableFlip: true
             };
 
             html5QrCode.start(
-                { facingMode: "environment" }, // Usa la cámara trasera del celular
+                { facingMode: "environment" },
                 config,
-                (decodedText) => {
-                    procesarLectura(decodedText);
-                },
-                (errorMessage) => {
-                    // Errores de escaneo continuo se omiten intencionalmente
-                }
+                (decodedText) => { procesarLectura(decodedText); },
+                (errorMessage) => {}
             ).then(() => {
                 escaneando = true;
                 document.getElementById('btnDetener').classList.remove('hidden');
                 document.getElementById('btnIniciar').classList.add('hidden');
             }).catch(err => {
                 console.error("No se pudo iniciar la cámara", err);
-                alert("No se pudo acceder a la cámara. Asegúrese de dar permisos de cámara a su navegador (Chrome/Safari).");
+                alert("No se pudo acceder a la cámara. Asegúrese de dar permisos de cámara.");
             });
         }
 
@@ -224,19 +213,17 @@
         }
 
         function reiniciarEscanner() {
-            if (!escaneando) {
-                iniciarEscanner();
-            }
+            if (!escaneando) iniciarEscanner();
         }
 
         function procesarLectura(codigoLeido) {
             const rackSeleccionado = document.getElementById('selectRack').value;
             const nivelSeleccionado = document.getElementById('inputNivel').value;
             const divResultado = document.getElementById('resultadoValidacion');
+            const lblUbicacion = document.getElementById('lblUbicacionExacta').textContent.trim();
 
             divResultado.classList.remove('hidden');
 
-            // Validar contra Google Sheets:
             let encontrado = datosSheet.find(row => {
                 let esPicking = row.tipo.toUpperCase() === "PICKING";
                 let esNivelA = row.nivel.toUpperCase() === nivelSeleccionado.toUpperCase();
@@ -251,10 +238,67 @@
                 divResultado.innerHTML = `✅ ¡CORRECTO!<br><span class="text-sm font-normal">Fila ${encontrado.fila} | Ubicación: ${encontrado.ubicacion}</span>`;
                 beep(600, 200);
             } else {
+                let registroEsperado = obtenerRegistrosFiltrados()[indiceActual];
+                let codigoDeberia = registroEsperado ? registroEsperado.codigoEsperado : "Desconocido";
+
+                let errorObj = {
+                    fecha: new Date().toLocaleString(),
+                    rack: `Rack ${rackSeleccionado} / ${nivelSeleccionado}`,
+                    ubicacion: lblUbicacion,
+                    codigoLeido: codigoLeido,
+                    codigoEsperado: codigoDeberia
+                };
+
+                // 1. Guardar en arreglo local
+                listaErrores.push(errorObj);
+
+                // 2. Guardar en la pestaña 'Errores_Picking'
+                fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(errorObj)
+                }).catch(err => console.error("Error guardando en la nube", err));
+
                 divResultado.className = "mt-4 p-4 rounded-lg text-center font-bold text-lg bg-red-100 text-red-800 border border-red-400";
                 divResultado.innerHTML = `❌ NO COINCIDE O NO ES PICKING<br><span class="text-sm font-normal">Código leído: ${codigoLeido}<br>Rack: ${rackSeleccionado} | Nivel: ${nivelSeleccionado}</span>`;
                 beep(200, 400);
+
+                // Mostrar botón de reporte
+                document.getElementById('btnExportarPDF').classList.remove('hidden');
             }
+        }
+
+        function descargarReportePDF() {
+            if (listaErrores.length === 0) return;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFontSize(16);
+            doc.setTextColor(220, 38, 38);
+            doc.text("Reporte de Discrepancias de Picking", 14, 15);
+
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Fecha del reporte: ${new Date().toLocaleString()}`, 14, 22);
+            doc.text(`Total Errores: ${listaErrores.length}`, 14, 27);
+
+            const bodyTabla = listaErrores.map(item => [
+                item.fecha.split(', ')[1] || item.fecha,
+                item.rack,
+                item.ubicacion,
+                item.codigoLeido,
+                item.codigoEsperado
+            ]);
+
+            doc.autoTable({
+                startY: 32,
+                head: [['Hora', 'Rack/Nivel', 'Ubicación', 'Leído (Error)', 'Esperado']],
+                body: bodyTabla,
+                headStyles: { fillColor: [15, 23, 42] },
+                styles: { fontSize: 9 }
+            });
+
+            doc.save(`Errores_Picking_${new Date().toISOString().slice(0,10)}.pdf`);
         }
 
         function beep(frequency, duration) {
