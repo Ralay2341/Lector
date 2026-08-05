@@ -113,22 +113,23 @@
 
         document.getElementById('selectRack').addEventListener('change', actualizarInfoUbicacion);
 
-        // 📍 FILTRADO EXACTO POR LA COLUMNA H (RACK)
+        // 📍 FILTRADO EXACTO Y ROBUSTO POR COLUMNA H (RACK)
         function obtenerRegistrosFiltrados() {
             const rackSel = document.getElementById('selectRack').value; // Ej: "08"
             const nivelSel = document.getElementById('inputNivel').value;  // Ej: "A"
 
             if (datosSheet.length === 0) return [];
 
+            const numRackSeleccionado = parseInt(rackSel, 10);
+
             return datosSheet.filter(row => {
                 let esPicking = row.tipo && row.tipo.toUpperCase() === "PICKING";
                 let esNivelA = row.nivel && row.nivel.toUpperCase() === nivelSel.toUpperCase();
                 
-                // Normaliza el valor de la Columna H (ej: "Rack 08", "Rack 8", "08" -> 8)
-                let numRackColH = String(row.rack).replace(/\D/g, ''); 
-                let numRackSel = String(rackSel).replace(/\D/g, '');
-                
-                let perteneceRackExacto = parseInt(numRackColH, 10) === parseInt(numRackSel, 10);
+                // Limpia y convierte a entero el rack traído de la Columna H
+                let numRackFila = parseInt(String(row.rack).replace(/\D/g, ''), 10);
+
+                let perteneceRackExacto = !isNaN(numRackFila) && numRackFila === numRackSeleccionado;
 
                 return esPicking && esNivelA && perteneceRackExacto;
             });
@@ -180,7 +181,7 @@
                 let response = await fetch(WEB_APP_URL);
                 datosSheet = await response.json();
                 
-                status.textContent = `✅ Datos cargados (${datosSheet.length} registros desde fila 5)`;
+                status.textContent = `✅ Datos cargados (${datosSheet.length} registros cargados)`;
                 status.className = "text-center text-sm font-semibold mb-4 text-green-600";
 
                 indiceActual = 0;
@@ -250,14 +251,14 @@
 
             divResultado.classList.remove('hidden');
 
-            // 📍 VALIDACIÓN EXACTA POR RACK EN COLUMNA H Y CÓDIGO
+            const numRackSeleccionado = parseInt(rackSeleccionado, 10);
+
             let encontrado = datosSheet.find(row => {
                 let esPicking = row.tipo.toUpperCase() === "PICKING";
                 let esNivelA = row.nivel.toUpperCase() === nivelSeleccionado.toUpperCase();
                 
-                let numRackColH = String(row.rack).replace(/\D/g, ''); 
-                let numRackSel = String(rackSeleccionado).replace(/\D/g, '');
-                let perteneceRackExacto = parseInt(numRackColH, 10) === parseInt(numRackSel, 10);
+                let numRackFila = parseInt(String(row.rack).replace(/\D/g, ''), 10);
+                let perteneceRackExacto = !isNaN(numRackFila) && numRackFila === numRackSeleccionado;
 
                 let coincideCodigo = row.codigoEsperado.trim() === codigoLeido.trim();
 
