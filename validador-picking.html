@@ -24,7 +24,7 @@
             <div>
                 <label class="block text-sm font-medium text-slate-700">Seleccione Rack:</label>
                 <select id="selectRack" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
-                    <!-- Se generan del 01 al 15 dinámicamente -->
+                    <!-- Se generan del 01 al 16 dinámicamente -->
                 </select>
             </div>
 
@@ -83,9 +83,9 @@
         let indiceActual = 0;
         let listaErrores = []; 
 
-        // Poblar Racks del 01 al 15
+        // Poblar Racks del 01 al 16
         const selectRack = document.getElementById('selectRack');
-        for (let i = 1; i <= 15; i++) {
+        for (let i = 1; i <= 16; i++) {
             let numStr = i < 10 ? '0' + i : '' + i;
             let opt = document.createElement('option');
             opt.value = numStr;
@@ -96,12 +96,11 @@
         function reanudarEscaneoSeguro() {
             if (html5QrCode && escaneando) {
                 try {
-                    // Si el escáner estaba pausado por una lectura previa, lo reanudamos
                     if (html5QrCode.getState() === Html5QrcodeScannerState.PAUSED) {
                         html5QrCode.resume();
                     }
                 } catch(e) {
-                    console.log("Estado de cámara al reanudar:", e);
+                    console.log("Estado cámara:", e);
                 }
             }
         }
@@ -114,17 +113,24 @@
 
         document.getElementById('selectRack').addEventListener('change', actualizarInfoUbicacion);
 
+        // 📍 FILTRADO EXACTO POR LA COLUMNA H (RACK)
         function obtenerRegistrosFiltrados() {
-            const rackSel = document.getElementById('selectRack').value;
-            const nivelSel = document.getElementById('inputNivel').value;
+            const rackSel = document.getElementById('selectRack').value; // Ej: "08"
+            const nivelSel = document.getElementById('inputNivel').value;  // Ej: "A"
 
             if (datosSheet.length === 0) return [];
 
             return datosSheet.filter(row => {
                 let esPicking = row.tipo && row.tipo.toUpperCase() === "PICKING";
                 let esNivelA = row.nivel && row.nivel.toUpperCase() === nivelSel.toUpperCase();
-                let perteneceRack = row.ubicacion && row.ubicacion.includes(`-${rackSel}-`);
-                return esPicking && esNivelA && perteneceRack;
+                
+                // Normaliza el valor de la Columna H (ej: "Rack 08", "Rack 8", "08" -> 8)
+                let numRackColH = String(row.rack).replace(/\D/g, ''); 
+                let numRackSel = String(rackSel).replace(/\D/g, '');
+                
+                let perteneceRackExacto = parseInt(numRackColH, 10) === parseInt(numRackSel, 10);
+
+                return esPicking && esNivelA && perteneceRackExacto;
             });
         }
 
@@ -161,7 +167,6 @@
                 actualizarUbicacionPantalla();
                 document.getElementById('resultadoValidacion').classList.add('hidden');
                 
-                // 📍 REANUDAR CÁMARA PARA LA SIGUIENTE POSICIÓN
                 reanudarEscaneoSeguro();
             }
         }
@@ -234,7 +239,6 @@
         }
 
         function procesarLectura(codigoLeido) {
-            // 📍 PAUSAR INMEDIATAMENTE EL ESCÁNER PARA CONGELAR LA LECTURA EN ESTA UBICACIÓN
             try {
                 if (html5QrCode) html5QrCode.pause();
             } catch(e) {}
@@ -246,13 +250,18 @@
 
             divResultado.classList.remove('hidden');
 
+            // 📍 VALIDACIÓN EXACTA POR RACK EN COLUMNA H Y CÓDIGO
             let encontrado = datosSheet.find(row => {
                 let esPicking = row.tipo.toUpperCase() === "PICKING";
                 let esNivelA = row.nivel.toUpperCase() === nivelSeleccionado.toUpperCase();
-                let perteneceRack = row.ubicacion.includes(`-${rackSeleccionado}-`); 
+                
+                let numRackColH = String(row.rack).replace(/\D/g, ''); 
+                let numRackSel = String(rackSeleccionado).replace(/\D/g, '');
+                let perteneceRackExacto = parseInt(numRackColH, 10) === parseInt(numRackSel, 10);
+
                 let coincideCodigo = row.codigoEsperado.trim() === codigoLeido.trim();
 
-                return esPicking && esNivelA && perteneceRack && coincideCodigo;
+                return esPicking && esNivelA && perteneceRackExacto && coincideCodigo;
             });
 
             if (encontrado) {
@@ -271,7 +280,6 @@
                     codigoEsperado: codigoDeberia
                 };
 
-                // Control estricto de duplicados: Solo una entrada por ubicación
                 let indiceExistente = listaErrores.findIndex(err => err.ubicacion === lblUbicacion);
 
                 if (indiceExistente !== -1) {
@@ -279,7 +287,6 @@
                 } else {
                     listaErrores.push(errorObj);
 
-                    // Guardado en Sheets silencioso
                     fetch(WEB_APP_URL, {
                         method: 'POST',
                         body: JSON.stringify(errorObj)
