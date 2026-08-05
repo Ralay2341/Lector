@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -105,33 +106,26 @@
             }
         }
 
-        function actualizarInfoUbicacion() {
+        // Cambio de Rack: Recarga de datos rápida filtrada desde el servidor
+        selectRack.addEventListener('change', () => {
             indiceActual = 0;
-            actualizarUbicacionPantalla();
-            reanudarEscaneoSeguro();
-        }
+            if (datosSheet.length > 0) {
+                cargarDatosSheet();
+            } else {
+                actualizarUbicacionPantalla();
+            }
+        });
 
-        document.getElementById('selectRack').addEventListener('change', actualizarInfoUbicacion);
-
-        // 📍 FILTRADO EXACTO Y ROBUSTO POR COLUMNA H (RACK)
+        // Filtrado en cliente de Picking y Nivel A
         function obtenerRegistrosFiltrados() {
-            const rackSel = document.getElementById('selectRack').value; // Ej: "08"
-            const nivelSel = document.getElementById('inputNivel').value;  // Ej: "A"
+            const nivelSel = document.getElementById('inputNivel').value; // Ej: "A"
 
             if (datosSheet.length === 0) return [];
-
-            const numRackSeleccionado = parseInt(rackSel, 10);
 
             return datosSheet.filter(row => {
                 let esPicking = row.tipo && row.tipo.toUpperCase() === "PICKING";
                 let esNivelA = row.nivel && row.nivel.toUpperCase() === nivelSel.toUpperCase();
-                
-                // Limpia y convierte a entero el rack traído de la Columna H
-                let numRackFila = parseInt(String(row.rack).replace(/\D/g, ''), 10);
-
-                let perteneceRackExacto = !isNaN(numRackFila) && numRackFila === numRackSeleccionado;
-
-                return esPicking && esNivelA && perteneceRackExacto;
+                return esPicking && esNivelA;
             });
         }
 
@@ -156,7 +150,7 @@
                 lblUbicacion.textContent = actual.ubicacion;
                 lblContador.textContent = `${indiceActual + 1}/${filtrados.length}`;
             } else {
-                lblUbicacion.textContent = `⚠️ Sin registros para Rack ${rackSel}`;
+                lblUbicacion.textContent = `⚠️ Sin registros de Picking Nivel A para Rack ${rackSel}`;
                 lblContador.textContent = "0/0";
             }
         }
@@ -172,16 +166,20 @@
             }
         }
 
+        // Carga ligera directa por Rack
         async function cargarDatosSheet() {
             const status = document.getElementById('statusCarga');
-            status.textContent = "Conectando con Google Sheets...";
+            const rackSeleccionado = document.getElementById('selectRack').value;
+
+            status.textContent = `Conectando con Google Sheets para Rack ${rackSeleccionado}...`;
             status.className = "text-center text-sm font-semibold mb-4 text-blue-600";
 
             try {
-                let response = await fetch(WEB_APP_URL);
+                let urlConRack = `${WEB_APP_URL}?rack=${encodeURIComponent(rackSeleccionado)}`;
+                let response = await fetch(urlConRack);
                 datosSheet = await response.json();
                 
-                status.textContent = `✅ Datos cargados (${datosSheet.length} registros cargados)`;
+                status.textContent = `✅ Datos cargados (${datosSheet.length} registros del Rack ${rackSeleccionado})`;
                 status.className = "text-center text-sm font-semibold mb-4 text-green-600";
 
                 indiceActual = 0;
@@ -251,18 +249,12 @@
 
             divResultado.classList.remove('hidden');
 
-            const numRackSeleccionado = parseInt(rackSeleccionado, 10);
-
             let encontrado = datosSheet.find(row => {
                 let esPicking = row.tipo.toUpperCase() === "PICKING";
                 let esNivelA = row.nivel.toUpperCase() === nivelSeleccionado.toUpperCase();
-                
-                let numRackFila = parseInt(String(row.rack).replace(/\D/g, ''), 10);
-                let perteneceRackExacto = !isNaN(numRackFila) && numRackFila === numRackSeleccionado;
-
                 let coincideCodigo = row.codigoEsperado.trim() === codigoLeido.trim();
 
-                return esPicking && esNivelA && perteneceRackExacto && coincideCodigo;
+                return esPicking && esNivelA && coincideCodigo;
             });
 
             if (encontrado) {
