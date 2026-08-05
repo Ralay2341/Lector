@@ -81,7 +81,7 @@
         let html5QrCode = null;
         let escaneando = false;
         let indiceActual = 0;
-        let listaErrores = []; // Registro local de errores únicos
+        let listaErrores = []; 
 
         // Poblar Racks del 01 al 15
         const selectRack = document.getElementById('selectRack');
@@ -93,9 +93,23 @@
             selectRack.appendChild(opt);
         }
 
+        function reanudarEscaneoSeguro() {
+            if (html5QrCode && escaneando) {
+                try {
+                    // Si el escáner estaba pausado por una lectura previa, lo reanudamos
+                    if (html5QrCode.getState() === Html5QrcodeScannerState.PAUSED) {
+                        html5QrCode.resume();
+                    }
+                } catch(e) {
+                    console.log("Estado de cámara al reanudar:", e);
+                }
+            }
+        }
+
         function actualizarInfoUbicacion() {
             indiceActual = 0;
             actualizarUbicacionPantalla();
+            reanudarEscaneoSeguro();
         }
 
         document.getElementById('selectRack').addEventListener('change', actualizarInfoUbicacion);
@@ -146,6 +160,9 @@
                 indiceActual = (indiceActual + 1) % filtrados.length;
                 actualizarUbicacionPantalla();
                 document.getElementById('resultadoValidacion').classList.add('hidden');
+                
+                // 📍 REANUDAR CÁMARA PARA LA SIGUIENTE POSICIÓN
+                reanudarEscaneoSeguro();
             }
         }
 
@@ -217,6 +234,11 @@
         }
 
         function procesarLectura(codigoLeido) {
+            // 📍 PAUSAR INMEDIATAMENTE EL ESCÁNER PARA CONGELAR LA LECTURA EN ESTA UBICACIÓN
+            try {
+                if (html5QrCode) html5QrCode.pause();
+            } catch(e) {}
+
             const rackSeleccionado = document.getElementById('selectRack').value;
             const nivelSeleccionado = document.getElementById('inputNivel').value;
             const divResultado = document.getElementById('resultadoValidacion');
@@ -249,17 +271,15 @@
                     codigoEsperado: codigoDeberia
                 };
 
-                // 📍 CONTROL DE DUPLICADOS POR UBICACIÓN
+                // Control estricto de duplicados: Solo una entrada por ubicación
                 let indiceExistente = listaErrores.findIndex(err => err.ubicacion === lblUbicacion);
 
                 if (indiceExistente !== -1) {
-                    // Si la ubicación ya falló antes, actualiza la hora y el último código leído
                     listaErrores[indiceExistente] = errorObj;
                 } else {
-                    // Si es un nuevo registro de error para esta ubicación, lo agrega
                     listaErrores.push(errorObj);
 
-                    // Solo enviamos a Google Sheets si es una ubicación con error nueva
+                    // Guardado en Sheets silencioso
                     fetch(WEB_APP_URL, {
                         method: 'POST',
                         body: JSON.stringify(errorObj)
@@ -270,7 +290,6 @@
                 divResultado.innerHTML = `❌ NO COINCIDE O NO ES PICKING<br><span class="text-sm font-normal">Código leído: ${codigoLeido}<br>Rack: ${rackSeleccionado} | Nivel: ${nivelSeleccionado}</span>`;
                 beep(200, 400);
 
-                // Mostrar botón para descargar el reporte
                 document.getElementById('btnExportarPDF').classList.remove('hidden');
             }
         }
